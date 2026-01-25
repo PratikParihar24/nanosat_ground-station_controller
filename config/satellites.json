@@ -1,0 +1,22 @@
+{
+  "satellites": [
+    {
+      "name": "ISS (ZARYA)",
+      "norad_id": 25544,
+      "frequency": 145800000,
+      "description": "International Space Station - FM Voice Repeater"
+    },
+    {
+      "name": "NOAA 18",
+      "norad_id": 28654,
+      "frequency": 137912500,
+      "description": "Weather Satellite - APT Images"
+    },
+    {
+      "name": "GTUSAT-1",
+      "norad_id": 99999,
+      "frequency": 437500000,
+      "description": "Simulated CubeSat for Development"
+    }
+  ]
+}

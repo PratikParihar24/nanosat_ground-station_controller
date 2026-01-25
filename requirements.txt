@@ -1,0 +1,18 @@
+# --- Math & Orbit Engine ---
+skyfield>=1.46      # High precision astronomy/orbit math
+numpy>=1.26.0,<2.0.0 # Allow 1.26.2/1.26.4 etc, but block 2.0+
+sgp4>=2.23          # Simplified General Perturbations
+
+# --- Radio & Signal Processing ---
+pyrtlsdr>=0.3.0     # Driver for the SDR hardware
+scipy>=1.11.3       # Advanced signal processing filters
+construct>=2.10.69  # Binary parsing
+
+# --- Frontend & Data ---
+streamlit>=1.31.0   # The Web Dashboard
+pandas>=2.1.1       # Dataframes for CSV logging
+plotly>=5.18.0      # Interactive graphs
+
+# --- Utilities ---
+pyserial>=3.5       # Communication with Rotator hardware
+requests>=2.31.0    # Downloading TLEs
