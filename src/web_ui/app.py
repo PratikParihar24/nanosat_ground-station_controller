@@ -20,6 +20,7 @@ if project_root not in sys.path:
 from src.orbit_engine import OrbitEngine
 from src.radio_core import RadioCore
 from src.decoder import TelemetryDecoder
+from src.data_manager import DataManager  # <--- Add this
 
 # --- Page Config ---
 st.set_page_config(
@@ -80,15 +81,28 @@ with col2:
 
     tracking_active = st.toggle("ACTIVATE TRACKING", value=False)
 
+#src/web_ui/app.py
+
+# ... (Previous code remains the same) ...
+
 # --- The "Game Loop" ---
 if tracking_active:
     
-    # Test TLE for ISS (Hardcoded for demo)
-    tle1 = "1 25544U 98067A   24024.50000000  .00016717  00000+0  30000-3 0  9991"
-    tle2 = "2 25544  51.6416 110.0000 0005000 100.0000 200.0000 15.50000000400001"
+    # --- FIX START: Use Live TLEs instead of Hardcoded ones ---
+    # We ask the engine: "Do you have this satellite in your downloaded file?"
+    sat_obj = orbit_engine.get_satellite_by_name(selected_sat_name)
     
-    sat_obj = orbit_engine.create_satellite(tle1, tle2, selected_sat_name)
+    if not sat_obj:
+        # If the user selects "GTUSAT-1" (our fake one) or a missing sat
+        st.error(f"⚠️ Could not find '{selected_sat_name}' in the live TLE file.")
+        st.warning("Ensure the satellite name in satellites.json matches CelesTrak exactly.")
+        st.stop()
+    # --- FIX END ---
+    
     base_freq = current_sat['frequency']
+    
+    # --- NEW: Start Recording ---
+    logger = DataManager(selected_sat_name)
     
     while True:
         # 1. PHYSICS: Get Position
@@ -101,6 +115,10 @@ if tracking_active:
         # 3. DATA: Mock Packet
         raw_packet = decoder.get_mock_packet()
         telemetry = decoder.parse_frame(raw_packet)
+        
+        # --- Save to Disk ---
+        if telemetry:
+            logger.log_packet(telemetry, pos, mock_doppler)
         
         # 4. UPDATE UI
         az_metric.metric("Azimuth", f"{pos['azimuth']:.2f}°")
@@ -132,7 +150,6 @@ if tracking_active:
             height=400,
             margin=dict(l=20, r=20, t=20, b=20)
         )
-        # We removed 'use_container_width' to fix your warning
         radar_chart.plotly_chart(fig)
         
         time.sleep(0.5)
