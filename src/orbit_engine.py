@@ -33,34 +33,23 @@ class OrbitEngine:
         if tle_update:
             self._update_tles()
             
-        # 5. Load TLEs (ROBUST FIX)
-        # We load the file, then force it into a dictionary {Name: Object}
+        # 5. Load TLEs
         loaded_data = load.tle_file(self.tle_file)
-        
         if isinstance(loaded_data, list):
-            # If it's a list, convert it to a dict
             self.satellites = {sat.name: sat for sat in loaded_data}
         else:
-            # If it's already a dict, keep it
             self.satellites = loaded_data
             
         print(f"[INFO] Loaded {len(self.satellites)} satellites.")
 
-        
     def _update_tles(self):
-        """
-        Private method to check if TLEs are stale and download new ones.
-        """
         should_download = False
-        
-        # Check if file exists
         if not os.path.exists(self.tle_file):
             print("[WARN] No TLE file found. Downloading fresh...")
             should_download = True
         else:
-            # Check age (Stale if older than 24 hours)
             file_age = time.time() - os.path.getmtime(self.tle_file)
-            if file_age > 86400: # 86400 seconds = 1 Day
+            if file_age > 86400: 
                 print(f"[INFO] TLE file is {file_age/3600:.1f} hours old. Updating...")
                 should_download = True
             else:
@@ -78,35 +67,36 @@ class OrbitEngine:
             except Exception as e:
                 print(f"[ERR] Internet Error: {e}. Using cached file if available.")
 
-    def get_satellite_by_name(self, name):
+    def get_satellite_by_name(self, name, custom_tle_lines=None):
         """
-        Searches for a satellite. 
-        Auto-strips whitespace to fix the 'ISS (ZARYA)    ' error.
+        Searches for a satellite.
+        Priority 1: Custom TLE provided in config (JSON)
+        Priority 2: Public TLE from CelesTrak file
         """
-        # 1. Direct Match (Fastest)
+        # 1. Check for Manual Override (Custom TLE)
+        if custom_tle_lines and len(custom_tle_lines) == 2:
+            print(f"[INFO] Using Custom TLE for {name}")
+            return EarthSatellite(custom_tle_lines[0], custom_tle_lines[1], name, self.ts)
+
+        # 2. Direct Match
         if name in self.satellites:
             return self.satellites[name]
             
-        # 2. Smart Match (Strip whitespace)
-        # We loop through all keys and clean them to see if they match
+        # 3. Smart Match (Strip whitespace)
         for key in self.satellites.keys():
             if key.strip() == name.strip():
                 return self.satellites[key]
                 
-        # 3. Fuzzy Match (If you just type 'ISS')
-        # This helps if you don't know the full name
+        # 4. Fuzzy Match
         for key in self.satellites.keys():
             if name.upper() in key.strip().upper():
                 print(f"[INFO] Exact match not found, but found '{key}'. Using that.")
                 return self.satellites[key]
 
-        print(f"[ERR] Satellite '{name}' not found in TLE file.")
+        print(f"[ERR] Satellite '{name}' not found anywhere.")
         return None
 
     def get_position(self, satellite):
-        """
-        Returns Azimuth, Elevation, Distance for a satellite object.
-        """
         t = self.ts.now()
         difference = satellite - self.station
         topocentric = difference.at(t)
@@ -119,19 +109,9 @@ class OrbitEngine:
             'timestamp': t.utc_iso()
         }
 
-# --- TEST BLOCK ---
 if __name__ == "__main__":
     engine = OrbitEngine()
-    
-    # Try finding ISS (It should work now even with spaces!)
     iss = engine.get_satellite_by_name('ISS (ZARYA)')
-    
     if iss:
         pos = engine.get_position(iss)
-        print(f"\n[SUCCESS] TRACKING LOCK ESTABLISHED")
-        print(f"Target:     ISS (ZARYA)")
-        print(f"Azimuth:    {pos['azimuth']:.2f} deg")
-        print(f"Elevation:  {pos['elevation']:.2f} deg")
-        print(f"Distance:   {pos['distance_km']:.2f} km")
-    else:
-        print("[FAIL] Still couldn't find it.")
+        print(f"[SUCCESS] Tracking ISS at El: {pos['elevation']:.2f}")

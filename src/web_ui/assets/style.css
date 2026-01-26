@@ -1,0 +1,141 @@
+/* src/web_ui/assets/style.css */
+
+/* ============================
+   1. GLOBAL THEME
+   ============================ */
+.stApp {
+    background: radial-gradient(circle at 10% 20%, rgb(0, 0, 0) 0%, rgb(20, 20, 35) 90.2%);
+}
+
+/* Hide Streamlit Header Strip */
+header[data-testid="stHeader"] {
+    background-color: transparent;
+}
+
+/* Force ALL text to be bright */
+.stMarkdown, .stText, p, span, div, label {
+    color: #e0e0e0 !important;
+}
+
+h1, h2, h3 {
+    color: #ffffff !important;
+    text-shadow: 0 0 10px rgba(0, 255, 255, 0.5);
+    font-weight: 700 !important;
+}
+
+/* ============================
+   2. MAIN DASHBOARD WIDGETS
+   ============================ */
+/* Neon Glass Cards for Metrics */
+div[data-testid="stMetric"] {
+    background-color: rgba(20, 20, 30, 0.6);
+    border: 1px solid rgba(0, 255, 255, 0.2);
+    padding: 10px;
+    border-radius: 8px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+    transition: all 0.3s ease;
+}
+
+div[data-testid="stMetric"]:hover {
+    border-color: #00FFFF;
+    box-shadow: 0 0 15px rgba(0, 255, 255, 0.3);
+}
+
+div[data-testid="stMetricLabel"] p {
+    color: #00e6e6 !important; /* Cyan Label */
+    font-size: 0.85rem !important;
+}
+
+div[data-testid="stMetricValue"] div {
+    color: #ffffff !important;
+    font-size: 1.8rem !important;
+}
+
+/* Tables (Pass Predictor) */
+div[data-testid="stTable"] {
+    background: transparent;
+}
+thead tr th {
+    background-color: rgba(0, 255, 255, 0.1) !important;
+    color: #00FFFF !important;
+    border-bottom: 1px solid #00FFFF !important;
+}
+tbody tr td {
+    color: white !important;
+    border-bottom: 1px solid #333 !important;
+}
+
+/* Buttons */
+button {
+    border: 1px solid #FF00FF !important;
+    color: #FF00FF !important;
+    background: transparent !important;
+    border-radius: 5px !important;
+}
+button:hover {
+    background-color: #FF00FF !important;
+    color: white !important;
+    box-shadow: 0 0 10px #FF00FF;
+}
+
+/* ============================
+   3. SIDEBAR NAVIGATION STYLING
+   ============================ */
+/* Sidebar Background */
+section[data-testid="stSidebar"] {
+    background-color: #05050a; /* Ultra Dark Blue/Black */
+    border-right: 1px solid #333;
+}
+
+/* The Radio Button Container (Navigation Menu) */
+div[role="radiogroup"] {
+    background: transparent;
+}
+
+/* Unselected Radio Options */
+div[role="radiogroup"] label {
+    background: transparent !important;
+    padding: 10px;
+    border-radius: 5px;
+    border: 1px solid transparent;
+    transition: background 0.3s;
+}
+
+div[role="radiogroup"] label:hover {
+    background: rgba(255, 255, 255, 0.1) !important;
+    border: 1px solid #555;
+}
+
+/* Selected Radio Option (The "Active" Tab) */
+div[role="radiogroup"] [data-checked="true"] + div {
+    color: #000000 !important; /* Black text for contrast */
+    font-weight: bold;
+}
+
+/* Force the little circle/dot to be Neon */
+div[role="radiogroup"] [data-checked="true"] {
+    background-color: #00FFFF !important; /* Cyan Dot */
+}
+
+/* Dropdown Box (Selectbox) Styling */
+div[data-baseweb="select"] > div {
+    background-color: #111 !important; /* Dark Background */
+    color: white !important;
+    border: 1px solid #444 !important;
+}
+
+/* Dropdown Options List */
+ul[data-testid="stSelectboxVirtualDropdown"] {
+    background-color: #111 !important;
+}
+li[role="option"] {
+    color: white !important;
+}
+li[role="option"]:hover {
+    background-color: #333 !important;
+}
+
+/* Sidebar Separator Line */
+hr {
+    border-color: #333 !important;
+}

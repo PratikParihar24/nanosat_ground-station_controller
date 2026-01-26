@@ -2,21 +2,22 @@
   "satellites": [
     {
       "name": "ISS (ZARYA)",
-      "norad_id": 25544,
       "frequency": 145800000,
-      "description": "International Space Station - FM Voice Repeater"
-    },
-    {
-      "name": "NOAA 18",
-      "norad_id": 28654,
-      "frequency": 137912500,
-      "description": "Weather Satellite - APT Images"
+      "description": "International Space Station - Public TLE"
     },
     {
       "name": "GTUSAT-1",
-      "norad_id": 99999,
       "frequency": 437500000,
-      "description": "Simulated CubeSat for Development"
+      "description": "Custom CubeSat - Manual TLE Override",
+      "custom_tle": [
+        "1 99999U 24001A   24025.50000000  .00000000  00000-0  00000-0 0  9991",
+        "2 99999  51.6400 120.0000 0005000 100.0000 250.0000 15.50000000    16"
+      ]
+    },
+    {
+      "name": "NOAA 19",
+      "frequency": 137100000,
+      "description": "Weather Satellite - APT Images"
     }
   ]
 }
