@@ -5,6 +5,7 @@ import os
 import time
 import requests
 from skyfield.api import Topos, load, EarthSatellite
+from datetime import timedelta
 
 class OrbitEngine:
     def __init__(self, config_path='config/stations.conf', tle_update=True):
@@ -108,7 +109,39 @@ class OrbitEngine:
             'distance_km': distance.km,
             'timestamp': t.utc_iso()
         }
+    
+    def get_ground_track(self, satellite, duration_minutes=180, step_seconds=60):
+        """
+        Calculates the Sub-Satellite Point (Lat/Lon) for the past and future.
+        """
+        from datetime import timedelta # Ensure this is imported
 
+        # 1. Get the current time as a standard Python datetime object (UTC)
+        t0 = self.ts.now()
+        start_dt = t0.utc_datetime() 
+        
+        # 2. Shift back by half the duration
+        start_time = start_dt - timedelta(minutes=duration_minutes/2)
+        
+        # 3. Create a list of standard Python datetimes
+        # We generate [T-90, T-89, ... T+0 ... T+90]
+        times = [start_time + timedelta(seconds=i*step_seconds) 
+                 for i in range(int(duration_minutes*60/step_seconds))]
+        
+        # 4. Convert that list back to Skyfield Time objects
+        t_vector = self.ts.from_datetimes(times)
+        
+        # 5. Calculate Positions
+        geocentric = satellite.at(t_vector)
+        subpoint = geocentric.subpoint()
+        
+        return {
+            'lat': subpoint.latitude.degrees,
+            'lon': subpoint.longitude.degrees,
+            # We return the raw datetimes for debugging/plotting if needed
+            'times': times 
+        }
+    
 if __name__ == "__main__":
     engine = OrbitEngine()
     iss = engine.get_satellite_by_name('ISS (ZARYA)')

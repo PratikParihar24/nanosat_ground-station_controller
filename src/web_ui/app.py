@@ -22,7 +22,7 @@ from src.decoder import TelemetryDecoder
 from src.data_manager import DataManager
 from src.pass_predictor import PassPredictor
 
-# --- PAGE CONFIG (Layout) ---
+# --- PAGE CONFIG ---
 st.set_page_config(
     page_title="NGSC Mission Control", 
     page_icon="🛰️", 
@@ -30,37 +30,24 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- HELPER: CSS LOADER ---
+# --- HELPER FUNCTIONS ---
 def load_css(file_name):
     with open(file_name) as f:
         st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
 
-# --- HELPER: RADAR DRAWER ---
 def create_radar_fig(azimuth, elevation, is_active=False):
-    """Generates the Plotly Figure for the Radar"""
-    plot_el = max(0, elevation) # Clamp negative values to 0 for display
-    
-    if is_active:
-        marker_color = '#00FF00' # Neon Green
-        symbol = 'cross'
-        opacity = 1.0
-    else:
-        marker_color = '#444444' # Dim Grey
-        symbol = 'circle'
-        opacity = 0.5
+    plot_el = max(0, elevation)
+    marker_color = '#00FF00' if is_active else '#444444'
+    symbol = 'cross' if is_active else 'circle'
+    opacity = 1.0 if is_active else 0.5
 
     fig = go.Figure()
-    
-    # The Satellite Dot
     fig.add_trace(go.Scatterpolar(
         r=[90 - plot_el], 
         theta=[azimuth],
         mode='markers',
         marker=dict(size=20, color=marker_color, symbol=symbol, line=dict(width=2, color='white'), opacity=opacity),
-        name='Satellite'
     ))
-    
-    # The Cyberpunk Grid Layout
     fig.update_layout(
         paper_bgcolor='rgba(0,0,0,0)',
         plot_bgcolor='rgba(0,0,0,0)',
@@ -72,58 +59,84 @@ def create_radar_fig(azimuth, elevation, is_active=False):
         showlegend=False,
         height=350,
         margin=dict(l=20, r=20, t=20, b=20),
-        font=dict(color="white")
     )
     return fig
 
-# --- INITIALIZATION ---
+def create_map_fig(pos, ground_track, st_lat, st_lon):
+    # Calculate current sat position (Lat/Lon) from the middle of the track (approx)
+    # In a real system, we'd calculate this precisely, but for UI smoothnes...
+    # We grab the last point in the 'past' list, which is 'now'.
+    # Actually, let's just use the ground_track mid-point for safety.
+    idx = len(ground_track['lat']) // 2
+    sat_lat = ground_track['lat'][idx]
+    sat_lon = ground_track['lon'][idx]
+
+    fig = go.Figure()
+
+    # 1. Orbit Path
+    fig.add_trace(go.Scattergeo(
+        lat=ground_track['lat'], lon=ground_track['lon'],
+        mode='lines', line=dict(width=2, color='#00FFFF'),
+        hoverinfo='none'
+    ))
+
+    # 2. Ground Station
+    fig.add_trace(go.Scattergeo(
+        lat=[st_lat], lon=[st_lon],
+        mode='markers', marker=dict(size=10, color='#FF00FF', symbol='diamond'),
+        hoverinfo='text', text=['Ahmedabad Station']
+    ))
+
+    # 3. Satellite
+    fig.add_trace(go.Scattergeo(
+        lat=[sat_lat], lon=[sat_lon],
+        mode='markers', marker=dict(size=15, color='#00FF00', symbol='circle-open-dot', line=dict(width=3, color='white')),
+        hoverinfo='text', text=['Satellite']
+    ))
+
+    fig.update_layout(
+        geo=dict(
+            projection_type="natural earth",
+            showland=True, landcolor="rgb(20, 20, 20)",
+            showocean=True, oceancolor="rgb(10, 10, 15)",
+            showcountries=True, countrycolor="rgb(50, 50, 50)",
+            bgcolor='rgba(0,0,0,0)'
+        ),
+        paper_bgcolor='rgba(0,0,0,0)',
+        margin=dict(l=0, r=0, t=0, b=0),
+        showlegend=False,
+        height=400
+    )
+    return fig
+
+# --- INIT ---
 @st.cache_resource
 def get_system():
     try:
         with open(os.path.join(project_root, 'config/satellites.json'), 'r') as f:
             sat_data = json.load(f)
             sat_map = {s['name']: s for s in sat_data['satellites']}
-    except:
-        st.error("Config Error: satellites.json missing.")
-        st.stop()
-        
-    orbit = OrbitEngine()
-    radio = RadioCore(mock_mode=True)
-    decoder = TelemetryDecoder()
-    predictor = PassPredictor(orbit.station)
-    return sat_map, orbit, radio, decoder, predictor
+    except: st.stop()
+    return sat_map, OrbitEngine(), RadioCore(mock_mode=True), TelemetryDecoder(), PassPredictor(OrbitEngine().station)
 
-# Load System & Styles
 sat_map, orbit_engine, radio_core, decoder, predictor = get_system()
 css_path = os.path.join(current_dir, "assets", "style.css")
-if os.path.exists(css_path):
-    load_css(css_path)
+if os.path.exists(css_path): load_css(css_path)
 
 # --- SIDEBAR ---
 st.sidebar.title("🚀 NGSC V3.0")
 app_mode = st.sidebar.radio("Select Module", ["Mission Control", "Pass Predictor", "Data Vault"])
 st.sidebar.divider()
-
-st.sidebar.header("Target Config")
 selected_sat_name = st.sidebar.selectbox("Active Satellite", list(sat_map.keys()))
 current_sat_info = sat_map[selected_sat_name]
-
-# Load Satellite Logic
 custom_tle = current_sat_info.get('custom_tle', None)
 sat_obj = orbit_engine.get_satellite_by_name(selected_sat_name, custom_tle_lines=custom_tle)
+if sat_obj: st.sidebar.success(f"Locked: {selected_sat_name}")
 
-if sat_obj:
-    source = "Custom" if custom_tle else "CelesTrak"
-    st.sidebar.success(f"Locked: {selected_sat_name}")
-    st.sidebar.caption(f"Source: {source}")
-else:
-    st.sidebar.error("TLE Missing")
-
-# ==========================================
-# PAGE 1: MISSION CONTROL
-# ==========================================
+# ==========================
+# MISSION CONTROL
+# ==========================
 if app_mode == "Mission Control":
-    # Custom Header (Replaces the standard title)
     st.markdown(f"""
     <h1 style='text-align: left; margin-top: -50px;'>🛰️ MISSION CONTROL</h1>
     <p style='color: #00FFFF;'>STATUS: ONLINE | STATION: AHMEDABAD | TRACKING: {selected_sat_name}</p>
@@ -131,57 +144,64 @@ if app_mode == "Mission Control":
     """, unsafe_allow_html=True)
     
     col1, col2 = st.columns([2, 1])
-
+    
+    # 1. SETUP UI CONTAINERS (STATIC)
     with col1:
         st.subheader("Polar Radar")
-        
-        # 1. SETUP UI CONTAINERS
         c1, c2, c3 = st.columns(3)
         m_az = c1.metric("Azimuth", "0.0°")
         m_el = c2.metric("Elevation", "0.0°")
         m_dist = c3.metric("Range", "0 km")
         
-        radar_chart = st.empty()
-        
-        # 2. RENDER INITIAL STATIC RADAR (So it's not empty!)
-        if sat_obj:
-            initial_pos = orbit_engine.get_position(sat_obj)
-            initial_fig = create_radar_fig(initial_pos['azimuth'], initial_pos['elevation'], is_active=False)
-            radar_chart.plotly_chart(initial_fig, use_container_width=True)
+        # KEY FIX: Define the empty container ONCE
+        radar_placeholder = st.empty()
 
     with col2:
         st.subheader("Telemetry Link")
-        m_freq = st.metric("Frequency", f"{current_sat_info['frequency']/1e6} MHz")
-        m_dop = st.metric("Doppler", "0 Hz")
-        
+        m_freq = st.metric("Frequency", "--- MHz")
+        m_dop = st.metric("Doppler", "--- Hz")
         st.divider()
-        m_volt = st.metric("Battery", "No Signal")
-        m_temp = st.metric("Temp", "No Signal")
-        
-        # Tracking Switch
+        m_volt = st.metric("Battery", "---")
+        m_temp = st.metric("Temp", "---")
         tracking_active = st.toggle("ACTIVATE TRACKING", value=False)
+    
+    st.subheader("🌍 Global Ground Track")
+    # KEY FIX: Define the map container ONCE
+    map_placeholder = st.empty()
 
-    # 3. THE LIVE LOOP
+    # 2. INITIAL STATIC RENDER (So it's not empty at start)
+    if sat_obj:
+        pos = orbit_engine.get_position(sat_obj)
+        # Radar
+        fig_radar = create_radar_fig(pos['azimuth'], pos['elevation'], is_active=False)
+        radar_placeholder.plotly_chart(fig_radar, use_container_width=True, key="radar_static")
+        
+        # Map (Heavy calculation, do it once)
+        st_lat = float(orbit_engine.config['GROUND_STATION']['latitude'])
+        st_lon = float(orbit_engine.config['GROUND_STATION']['longitude'])
+        track_data = orbit_engine.get_ground_track(sat_obj, duration_minutes=180)
+        fig_map = create_map_fig(pos, track_data, st_lat, st_lon)
+        map_placeholder.plotly_chart(fig_map, use_container_width=True, key="map_static")
+
+    # 3. LIVE LOOP
+    # 3. LIVE LOOP
     if tracking_active and sat_obj:
         logger = DataManager(selected_sat_name)
         base_freq = current_sat_info['frequency']
-        
+        loop_counter = 0
+
         while True:
-            # Physics
+            # Physics & Data
             pos = orbit_engine.get_position(sat_obj)
             is_visible = pos['elevation'] > 0
             
-            # Radio/Data (Mock)
             mock_doppler = random.randint(-2000, 2000) 
             radio_core.set_doppler_freq(base_freq, mock_doppler)
-            
             packet = decoder.get_mock_packet()
             telem = decoder.parse_frame(packet)
-            
-            if telem:
-                logger.log_packet(telem, pos, mock_doppler)
+            if telem: logger.log_packet(telem, pos, mock_doppler)
 
-            # UI Updates
+            # UI METRICS (Fast)
             m_az.metric("Azimuth", f"{pos['azimuth']:.2f}°")
             m_dist.metric("Range", f"{pos['distance_km']:.0f} km")
             m_freq.metric("Frequency", f"{(base_freq+mock_doppler)/1e6:.6f} MHz")
@@ -198,36 +218,41 @@ if app_mode == "Mission Control":
                 m_temp.metric("Temp", "No Signal")
                 active_state = False
 
-            # Update Radar using helper function
-            fig = create_radar_fig(pos['azimuth'], pos['elevation'], is_active=active_state)
-            radar_chart.plotly_chart(fig, use_container_width=True)
+            # RADAR UPDATE (Fast - 0.5s)
+            fig_radar = create_radar_fig(pos['azimuth'], pos['elevation'], is_active=active_state)
             
+            # FIX: Removed 'key' argument to prevent DuplicateKeyError
+            # FIX: Changed use_container_width to match new Streamlit standards (or kept distinct)
+            radar_placeholder.plotly_chart(fig_radar, use_container_width=True)
+            
+            # MAP UPDATE (Slow - 10s)
+            if loop_counter % 20 == 0:
+                track_data = orbit_engine.get_ground_track(sat_obj, duration_minutes=180)
+                fig_map = create_map_fig(pos, track_data, st_lat, st_lon)
+                
+                # FIX: Removed 'key' argument here too
+                map_placeholder.plotly_chart(fig_map, use_container_width=True)
+            
+            loop_counter += 1
             time.sleep(0.5)
 
-# ==========================================
-# PAGE 2: PASS PREDICTOR
-# ==========================================
+# ==========================
+# PASS PREDICTOR
+# ==========================
 elif app_mode == "Pass Predictor":
     st.header(f"📅 Schedule: {selected_sat_name}")
-    
     if st.button("Calculate Next 24h"):
         with st.spinner("Calculating..."):
             passes = predictor.get_next_passes(sat_obj)
         if passes:
             st.success(f"Next AOS: {passes[0]['aos'].utc_datetime().strftime('%H:%M:%S UTC')}")
-            
-            # Create Table Data
             data_rows = [[p['aos'].utc_datetime().strftime("%H:%M:%S"), f"{p['max_el']:.1f}°", p['duration_str']] for p in passes]
-            df = pd.DataFrame(data_rows, columns=["Start Time (UTC)", "Max Elevation", "Duration"])
-            
-            # Display Table (CSS will now make this bright!)
-            st.table(df)
-        else:
-            st.warning("No visible passes found.")
+            st.table(pd.DataFrame(data_rows, columns=["Start (UTC)", "Max Elevation", "Duration"]))
+        else: st.warning("No visible passes found.")
 
-# ==========================================
-# PAGE 3: DATA VAULT
-# ==========================================
+# ==========================
+# DATA VAULT
+# ==========================
 elif app_mode == "Data Vault":
     st.header("💾 Data Vault")
     log_dir = os.path.join(project_root, 'data/telemetry')
