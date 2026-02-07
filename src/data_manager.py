@@ -55,4 +55,5 @@ class DataManager:
                     telemetry.get('temp', 0)
                 ])
         except Exception as e:
+            
             print(f"[ERROR] Write failed: {e}")
