@@ -16,6 +16,7 @@ project_root = os.path.abspath(os.path.join(current_dir, "../.."))
 if project_root not in sys.path:
     sys.path.append(project_root)
 
+# --- IMPORTS ---
 from src.orbit_engine import OrbitEngine
 from src.radio_core import RadioCore
 from src.decoder import TelemetryDecoder
@@ -60,35 +61,29 @@ def create_radar_fig(azimuth, elevation, is_active=False):
         showlegend=False,
         height=350,
         margin=dict(l=20, r=20, t=20, b=20),
+        autosize=True
     )
     return fig
 
 def create_map_fig(pos, ground_track, st_lat, st_lon):
-    # Calculate current sat position (Lat/Lon) from the middle of the track (approx)
-    # In a real system, we'd calculate this precisely, but for UI smoothnes...
-    # We grab the last point in the 'past' list, which is 'now'.
-    # Actually, let's just use the ground_track mid-point for safety.
     idx = len(ground_track['lat']) // 2
     sat_lat = ground_track['lat'][idx]
     sat_lon = ground_track['lon'][idx]
 
     fig = go.Figure()
 
-    # 1. Orbit Path
     fig.add_trace(go.Scattergeo(
         lat=ground_track['lat'], lon=ground_track['lon'],
         mode='lines', line=dict(width=2, color='#00FFFF'),
         hoverinfo='none'
     ))
 
-    # 2. Ground Station
     fig.add_trace(go.Scattergeo(
         lat=[st_lat], lon=[st_lon],
         mode='markers', marker=dict(size=10, color='#FF00FF', symbol='diamond'),
         hoverinfo='text', text=['Ahmedabad Station']
     ))
 
-    # 3. Satellite
     fig.add_trace(go.Scattergeo(
         lat=[sat_lat], lon=[sat_lon],
         mode='markers', marker=dict(size=15, color='#00FF00', symbol='circle-open-dot', line=dict(width=3, color='white')),
@@ -106,7 +101,8 @@ def create_map_fig(pos, ground_track, st_lat, st_lon):
         paper_bgcolor='rgba(0,0,0,0)',
         margin=dict(l=0, r=0, t=0, b=0),
         showlegend=False,
-        height=400
+        height=400,
+        autosize=True
     )
     return fig
 
@@ -127,6 +123,16 @@ if os.path.exists(css_path): load_css(css_path)
 # --- SIDEBAR ---
 st.sidebar.title("🚀 NGSC V3.0")
 app_mode = st.sidebar.radio("Select Module", ["Mission Control", "Pass Predictor", "Data Vault","HIL Telemetry"])
+
+# --- GHOST UI FIX ---
+if "last_module" not in st.session_state:
+    st.session_state.last_module = app_mode
+
+if st.session_state.last_module != app_mode:
+    st.session_state.last_module = app_mode
+    st.rerun()
+# --------------------
+
 st.sidebar.divider()
 selected_sat_name = st.sidebar.selectbox("Active Satellite", list(sat_map.keys()))
 current_sat_info = sat_map[selected_sat_name]
@@ -146,15 +152,12 @@ if app_mode == "Mission Control":
     
     col1, col2 = st.columns([2, 1])
     
-    # 1. SETUP UI CONTAINERS (STATIC)
     with col1:
         st.subheader("Polar Radar")
         c1, c2, c3 = st.columns(3)
         m_az = c1.metric("Azimuth", "0.0°")
         m_el = c2.metric("Elevation", "0.0°")
         m_dist = c3.metric("Range", "0 km")
-        
-        # KEY FIX: Define the empty container ONCE
         radar_placeholder = st.empty()
 
     with col2:
@@ -167,24 +170,20 @@ if app_mode == "Mission Control":
         tracking_active = st.toggle("ACTIVATE TRACKING", value=False)
     
     st.subheader("🌍 Global Ground Track")
-    # KEY FIX: Define the map container ONCE
     map_placeholder = st.empty()
 
-    # 2. INITIAL STATIC RENDER (So it's not empty at start)
+    # 2. INITIAL RENDER
     if sat_obj:
         pos = orbit_engine.get_position(sat_obj)
-        # Radar
         fig_radar = create_radar_fig(pos['azimuth'], pos['elevation'], is_active=False)
-        radar_placeholder.plotly_chart(fig_radar, use_container_width=True, key="radar_static")
+        radar_placeholder.plotly_chart(fig_radar)
         
-        # Map (Heavy calculation, do it once)
         st_lat = float(orbit_engine.config['GROUND_STATION']['latitude'])
         st_lon = float(orbit_engine.config['GROUND_STATION']['longitude'])
         track_data = orbit_engine.get_ground_track(sat_obj, duration_minutes=180)
         fig_map = create_map_fig(pos, track_data, st_lat, st_lon)
-        map_placeholder.plotly_chart(fig_map, use_container_width=True, key="map_static")
+        map_placeholder.plotly_chart(fig_map)
 
-    # 3. LIVE LOOP
     # 3. LIVE LOOP
     if tracking_active and sat_obj:
         logger = DataManager(selected_sat_name)
@@ -192,7 +191,7 @@ if app_mode == "Mission Control":
         loop_counter = 0
 
         while True:
-            # Physics & Data
+            # Physics
             pos = orbit_engine.get_position(sat_obj)
             is_visible = pos['elevation'] > 0
             
@@ -202,7 +201,7 @@ if app_mode == "Mission Control":
             telem = decoder.parse_frame(packet)
             if telem: logger.log_packet(telem, pos, mock_doppler)
 
-            # UI METRICS (Fast)
+            # UI METRICS
             m_az.metric("Azimuth", f"{pos['azimuth']:.2f}°")
             m_dist.metric("Range", f"{pos['distance_km']:.0f} km")
             m_freq.metric("Frequency", f"{(base_freq+mock_doppler)/1e6:.6f} MHz")
@@ -219,20 +218,14 @@ if app_mode == "Mission Control":
                 m_temp.metric("Temp", "No Signal")
                 active_state = False
 
-            # RADAR UPDATE (Fast - 0.5s)
+            # RADAR UPDATE
             fig_radar = create_radar_fig(pos['azimuth'], pos['elevation'], is_active=active_state)
+            radar_placeholder.plotly_chart(fig_radar)
             
-            # FIX: Removed 'key' argument to prevent DuplicateKeyError
-            # FIX: Changed use_container_width to match new Streamlit standards (or kept distinct)
-            radar_placeholder.plotly_chart(fig_radar, use_container_width=True)
-            
-            # MAP UPDATE (Slow - 10s)
             if loop_counter % 20 == 0:
                 track_data = orbit_engine.get_ground_track(sat_obj, duration_minutes=180)
                 fig_map = create_map_fig(pos, track_data, st_lat, st_lon)
-                
-                # FIX: Removed 'key' argument here too
-                map_placeholder.plotly_chart(fig_map, use_container_width=True)
+                map_placeholder.plotly_chart(fig_map)
             
             loop_counter += 1
             time.sleep(0.5)
@@ -262,19 +255,13 @@ elif app_mode == "Data Vault":
         selected_file = st.selectbox("Select Log", files)
         if selected_file:
             df_log = pd.read_csv(os.path.join(log_dir, selected_file))
-            st.dataframe(df_log, use_container_width=True)
+            # [FIXED] Changed width=None to width="stretch"
+            st.dataframe(df_log, width="stretch")
             if not df_log.empty and 'battery_voltage' in df_log.columns:
                 st.line_chart(df_log, x='timestamp', y='battery_voltage')
 
 # ==========================
-
-if app_mode == "HIL Telemetry":
-# --- [THE FIX] FORCE RESET ON CHANGE ---
-    if "last_module" not in st.session_state:
-        st.session_state.last_module = app_mode
-
-    if st.session_state.last_module != app_mode:
-        st.session_state.last_module = app_mode
-        st.rerun()
-# ---------------------------------------
+# HIL TELEMETRY
+# ==========================
+elif app_mode == "HIL Telemetry":
     run_hil_telemetry()
