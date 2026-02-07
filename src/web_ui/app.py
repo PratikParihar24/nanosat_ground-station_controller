@@ -21,6 +21,7 @@ from src.radio_core import RadioCore
 from src.decoder import TelemetryDecoder
 from src.data_manager import DataManager
 from src.pass_predictor import PassPredictor
+from src.web_ui.hil_mode import run_hil_telemetry
 
 # --- PAGE CONFIG ---
 st.set_page_config(
@@ -125,7 +126,7 @@ if os.path.exists(css_path): load_css(css_path)
 
 # --- SIDEBAR ---
 st.sidebar.title("🚀 NGSC V3.0")
-app_mode = st.sidebar.radio("Select Module", ["Mission Control", "Pass Predictor", "Data Vault"])
+app_mode = st.sidebar.radio("Select Module", ["Mission Control", "Pass Predictor", "Data Vault","HIL Telemetry"])
 st.sidebar.divider()
 selected_sat_name = st.sidebar.selectbox("Active Satellite", list(sat_map.keys()))
 current_sat_info = sat_map[selected_sat_name]
@@ -264,3 +265,16 @@ elif app_mode == "Data Vault":
             st.dataframe(df_log, use_container_width=True)
             if not df_log.empty and 'battery_voltage' in df_log.columns:
                 st.line_chart(df_log, x='timestamp', y='battery_voltage')
+
+# ==========================
+
+if app_mode == "HIL Telemetry":
+# --- [THE FIX] FORCE RESET ON CHANGE ---
+    if "last_module" not in st.session_state:
+        st.session_state.last_module = app_mode
+
+    if st.session_state.last_module != app_mode:
+        st.session_state.last_module = app_mode
+        st.rerun()
+# ---------------------------------------
+    run_hil_telemetry()
