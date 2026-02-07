@@ -249,16 +249,58 @@ elif app_mode == "Pass Predictor":
 # ==========================
 elif app_mode == "Data Vault":
     st.header("💾 Data Vault")
-    log_dir = os.path.join(project_root, 'data/telemetry')
+    
+    # 1. Source Selector
+    data_source = st.radio("Data Source:", ["Mission Control Logs", "HIL Telemetry Logs"], horizontal=True)
+    
+    # 2. Determine Path
+    base_log_dir = os.path.join(project_root, 'data/telemetry')
+    
+    if data_source == "HIL Telemetry Logs":
+        log_dir = os.path.join(base_log_dir, "hil_side")
+    else:
+        # --- [THE FIX] ---
+        # Explicitly look in the 'mission_control' folder now
+        log_dir = os.path.join(base_log_dir, "mission_control")
+
+    # 3. List Files (Smart Filter)
+    files = []
     if os.path.exists(log_dir):
-        files = sorted(os.listdir(log_dir), reverse=True)
-        selected_file = st.selectbox("Select Log", files)
+        all_items = sorted(os.listdir(log_dir), reverse=True)
+        files = [f for f in all_items if f.endswith(".csv") and os.path.isfile(os.path.join(log_dir, f))]
+    
+    if files:
+        c1, c2 = st.columns([3, 1])
+        with c1:
+            selected_file = st.selectbox("Select Log File", files)
+        with c2:
+            st.write("") 
+            st.write("") 
+            if st.button("🗑️ DELETE FILE", type="primary", key="vault_delete"):
+                try:
+                    os.remove(os.path.join(log_dir, selected_file))
+                    st.toast(f"Deleted {selected_file}")
+                    time.sleep(1)
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Error deleting file: {e}")
+
         if selected_file:
-            df_log = pd.read_csv(os.path.join(log_dir, selected_file))
-            # [FIXED] Changed width=None to width="stretch"
-            st.dataframe(df_log, width="stretch")
-            if not df_log.empty and 'battery_voltage' in df_log.columns:
-                st.line_chart(df_log, x='timestamp', y='battery_voltage')
+            file_path = os.path.join(log_dir, selected_file)
+            if os.path.exists(file_path):
+                df_log = pd.read_csv(file_path)
+                st.dataframe(df_log, width="stretch") 
+                
+                if not df_log.empty:
+                    st.subheader("Data Analysis")
+                    if 'light' in df_log.columns:
+                        st.line_chart(df_log, x='timestamp', y='light')
+                    elif 'battery_voltage' in df_log.columns:
+                        st.line_chart(df_log, x='timestamp', y='battery_voltage')
+            else:
+                st.warning("File deleted.")
+    else:
+        st.info(f"No log files found in {data_source}.")
 
 # ==========================
 # HIL TELEMETRY

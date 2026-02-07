@@ -1,3 +1,0 @@
-timestamp,azimuth,elevation,doppler_shift,battery_voltage,internal_temp,status_msg
-2026-02-07T09:59:12.159312,289.23,-5.17,-224,7.8100000000000005,34,ALL_OK
-2026-02-07T09:59:12.975368,289.32,-5.14,1348,7.62,34,ALL_OK
