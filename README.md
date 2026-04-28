@@ -211,7 +211,7 @@ ngsc_project/
 
 **1. Clone the repository:**
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/PratikParihar24/nanosat_ground-station_controller.git
 cd ngsc_project
 ```
 
