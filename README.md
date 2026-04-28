@@ -194,6 +194,7 @@ ngsc_project/
 │   └── satellites.json             # TLE data and frequency configurations
 │
 ├── sim_satellite.py                # Python-based tumbling satellite simulator
+├── requirements.txt                # Full pinned dependency manifest
 └── README.md
 ```
 
@@ -210,7 +211,7 @@ ngsc_project/
 
 **1. Clone the repository:**
 ```bash
-git clone https://github.com/PratikParihar24/nanosat_ground-station_controller.git
+git clone <your-repo-url>
 cd ngsc_project
 ```
 
@@ -226,9 +227,23 @@ venv\Scripts\activate
 ```
 
 **3. Install all dependencies:**
+
+First, make sure the `requirements.txt` is in your project root, then run:
 ```bash
-pip install streamlit fastapi uvicorn pandas plotly requests numpy skyfield
+pip install -r requirements.txt
 ```
+
+This installs the full dependency stack:
+
+| Category | Packages |
+|---|---|
+| **Orbit & Math** | `skyfield`, `numpy`, `sgp4` |
+| **Radio & Signal** | `pyrtlsdr`, `scipy`, `construct` |
+| **Frontend & Data** | `streamlit`, `pandas`, `plotly` |
+| **Backend** | `fastapi`, `uvicorn` |
+| **Utilities** | `pyserial`, `requests` |
+
+> ⚠️ **Note on NumPy:** The project pins `numpy>=1.26.0,<2.0.0` intentionally. NumPy 2.0+ introduced breaking API changes that affect several dependencies. Do not manually upgrade NumPy beyond the `1.x` series.
 
 ---
 
