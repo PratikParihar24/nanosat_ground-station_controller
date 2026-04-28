@@ -141,7 +141,6 @@ class OrbitEngine:
             # We return the raw datetimes for debugging/plotting if needed
             'times': times 
         }
-    
 if __name__ == "__main__":
     engine = OrbitEngine()
     iss = engine.get_satellite_by_name('ISS (ZARYA)')

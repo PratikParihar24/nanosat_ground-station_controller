@@ -165,11 +165,14 @@ def run_hil_telemetry():
             
             with pl_c1:
                 is_led_on = (led_state == "ON")
-                # The Toggle Switch
-                new_led = st.toggle("LED Power", value=is_led_on)
-                if new_led != is_led_on:
-                    send_command("LED_ON" if new_led else "LED_OFF")
-                    st.rerun()
+                # FIX: Add a unique 'key' and move the logic to 'on_change'.
+                # This prevents 'Ghost Triggers' from the Solar buttons.
+                st.toggle(
+                    "LED Power", 
+                    value=is_led_on, 
+                    key="led_switch_widget", 
+                    on_change=lambda: send_command("LED_ON" if st.session_state.led_switch_widget else "LED_OFF")
+                )
             
             with pl_c2:
                 # The Status Text (Using CSS class for alignment)
