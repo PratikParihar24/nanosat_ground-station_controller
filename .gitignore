@@ -1,0 +1,51 @@
+# ==========================================
+# 1. PYTHON (Ground Station & Backend)
+# ==========================================
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual Environments (CRITICAL: Never commit your venv)
+venv/
+env/
+.env
+.venv/
+
+# Streamlit specific
+.streamlit/secrets.toml
+
+# ==========================================
+# 2. C++ / ARDUINO (Flight Hardware)
+# ==========================================
+# If you are using standard Arduino IDE, it stores build files elsewhere, 
+# but if you ever switch to VS Code / PlatformIO, this keeps it clean.
+.pio/
+*.hex
+*.bin
+*.elf
+
+# ==========================================
+# 3. MISSION LOGS & GENERATED DATA
+# ==========================================
+# Ignore telemetry dumps, databases, or logs you generate during testing
+*.log
+*.sqlite3
+*.csv
+# Ignore the generated post-mortem PDF so you don't accidentally commit binary files
+Nanosat_Project_PostMortem.pdf
+
+# ==========================================
+# 4. OS & IDE JUNK
+# ==========================================
+# Windows
+Thumbs.db
+desktop.ini
+
+# macOS
+.DS_Store
+
+# VS Code / PyCharm / IDE settings (Usually best to ignore local editor configs)
+.vscode/
+.idea/
+*.swp
