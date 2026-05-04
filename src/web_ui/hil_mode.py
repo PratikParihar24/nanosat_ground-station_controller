@@ -5,9 +5,11 @@ import plotly.graph_objects as go
 import numpy as np
 import time
 import requests 
+import os 
 
 # --- CONFIG ---
-BACKEND_URL = "http://127.0.0.1:8000"
+# Allow backend URL to be overridden via environment variable
+BACKEND_URL = os.environ.get("BACKEND_URL", "http://127.0.0.1:8000")
 
 # --- CUSTOM CSS ---
 def inject_hil_css():
@@ -165,13 +167,23 @@ def run_hil_telemetry():
             
             with pl_c1:
                 is_led_on = (led_state == "ON")
-                # FIX: Add a unique 'key' and move the logic to 'on_change'.
-                # This prevents 'Ghost Triggers' from the Solar buttons.
+                
+                # Define callback function to avoid race condition
+                def on_led_toggle():
+                    new_state = st.session_state.led_switch_widget
+                    result = send_command("LED_ON" if new_state else "LED_OFF")
+                    if result:
+                        st.toast(f"LED {'ON' if new_state else 'OFF'} command sent")
+                    else:
+                        st.error("Failed to send command")
+                        # Revert the toggle visually if command failed
+                        st.session_state.led_switch_widget = not new_state
+                
                 st.toggle(
                     "LED Power", 
                     value=is_led_on, 
                     key="led_switch_widget", 
-                    on_change=lambda: send_command("LED_ON" if st.session_state.led_switch_widget else "LED_OFF")
+                    on_change=on_led_toggle
                 )
             
             with pl_c2:

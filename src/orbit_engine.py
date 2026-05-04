@@ -4,6 +4,8 @@ import configparser
 import os
 import time
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 from skyfield.api import Topos, load, EarthSatellite
 from datetime import timedelta
 
@@ -57,16 +59,32 @@ class OrbitEngine:
                 print("[INFO] TLE file is fresh. Using local cache.")
         
         if should_download:
+            # Setup session with retry logic
+            session = requests.Session()
+            retries = Retry(
+                total=3, 
+                backoff_factor=1, 
+                status_forcelist=[500, 502, 503, 504],
+                allowed_methods=["GET"]
+            )
+            adapter = HTTPAdapter(max_retries=retries)
+            session.mount("https://", adapter)
+            session.mount("http://", adapter)
+            
             try:
-                response = requests.get(self.tle_url, timeout=10)
+                response = session.get(self.tle_url, timeout=30)
                 if response.status_code == 200:
                     with open(self.tle_file, 'wb') as f:
                         f.write(response.content)
                     print("[SUCCESS] TLEs updated from CelesTrak.")
                 else:
                     print(f"[ERR] Failed to download TLEs. HTTP {response.status_code}")
+            except requests.exceptions.Timeout:
+                print(f"[ERR] TLE download timed out after 30s. Using cached file if available.")
+            except requests.exceptions.ConnectionError as e:
+                print(f"[ERR] TLE download connection error: {e}. Using cached file if available.")
             except Exception as e:
-                print(f"[ERR] Internet Error: {e}. Using cached file if available.")
+                print(f"[ERR] TLE download failed: {e}. Using cached file if available.")
 
     def get_satellite_by_name(self, name, custom_tle_lines=None):
         """
