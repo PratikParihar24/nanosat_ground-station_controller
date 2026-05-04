@@ -130,6 +130,10 @@ if "last_module" not in st.session_state:
 if st.session_state.last_module != app_mode:
     st.session_state.last_module = app_mode
     st.rerun()
+
+# Initialize the redirect latch
+if "redirect_triggered" not in st.session_state:
+    st.session_state.redirect_triggered = False
 # --------------------
 
 st.sidebar.divider()
@@ -149,54 +153,23 @@ if app_mode == "Mission Control":
     <hr style='border-color: #00FFFF; margin-top: -10px;'>
     """, unsafe_allow_html=True)
     
-    col1, col2 = st.columns([2, 1])
+    # Top level toggle to activate the tracking loop
+    tracking_active = st.toggle("ACTIVATE TRACKING", value=False)
     
-    with col1:
-        st.subheader("Polar Radar")
-        c1, c2, c3 = st.columns(3)
-        m_az = c1.metric("Azimuth", "0.0°")
-        m_el = c2.metric("Elevation", "0.0°")
-        m_dist = c3.metric("Range", "0 km")
-        radar_placeholder = st.empty()
-
-    with col2:
-        st.subheader("Telemetry Link")
-        m_freq = st.metric("Frequency", "--- MHz")
-        m_dop = st.metric("Doppler", "--- Hz")
-        st.divider()
-        m_volt = st.metric("Battery", "---")
-        m_temp = st.metric("Temp", "---")
-        tracking_active = st.toggle("ACTIVATE TRACKING", value=False)
-    
-    st.subheader("🌍 Global Ground Track")
-    map_placeholder = st.empty()
-
-    # 2. INITIAL RENDER
-    if sat_obj:
-        pos = orbit_engine.get_position(sat_obj)
-        fig_radar = create_radar_fig(pos['azimuth'], pos['elevation'], is_active=False)
-        radar_placeholder.plotly_chart(fig_radar)
-        
-        st_lat = float(orbit_engine.config['GROUND_STATION']['latitude'])
-        st_lon = float(orbit_engine.config['GROUND_STATION']['longitude'])
-        track_data = orbit_engine.get_ground_track(sat_obj, duration_minutes=180)
-        fig_map = create_map_fig(pos, track_data, st_lat, st_lon)
-        map_placeholder.plotly_chart(fig_map)
-
-    # 3. LIVE LOOP (Non-blocking with session state)
-    if tracking_active and sat_obj:
-        # Initialize tracking state if not exists
+    # 2. FRAGMENT DEFINITION
+    @st.fragment(run_every="0.5s")
+    def live_tracking_ui(sat_obj_ref):
         if "tracking_initialized" not in st.session_state:
             st.session_state.tracking_initialized = True
             st.session_state.tracking_loop_count = 0
             st.session_state.tracking_logger = DataManager(selected_sat_name)
-        
+            
         logger = st.session_state.tracking_logger
         base_freq = current_sat_info['frequency']
         loop_counter = st.session_state.tracking_loop_count
 
         # Physics
-        pos = orbit_engine.get_position(sat_obj)
+        pos = orbit_engine.get_position(sat_obj_ref)
         is_visible = pos['elevation'] > 0
         
         mock_doppler = random.randint(-2000, 2000) 
@@ -204,7 +177,6 @@ if app_mode == "Mission Control":
         packet = decoder.get_mock_packet()
         telem = decoder.parse_frame(packet)
         
-        # Handle None return from parse_frame
         voltage = 0
         temp = 0
         if telem:
@@ -212,50 +184,91 @@ if app_mode == "Mission Control":
             voltage = telem.get('voltage', 0)
             temp = telem.get('temp', 0)
 
-        # UI METRICS
-        m_az.metric("Azimuth", f"{pos['azimuth']:.2f}°")
-        m_dist.metric("Range", f"{pos['distance_km']:.0f} km")
-        m_freq.metric("Frequency", f"{(base_freq+mock_doppler)/1e6:.6f} MHz")
-        m_dop.metric("Doppler", f"{mock_doppler} Hz")
-
+        # Latch logic for redirect (one-time)
         if is_visible:
-            m_el.metric("Elevation", f"{pos['elevation']:.2f}°", "LOCKED")
-            m_volt.metric("Battery", f"{voltage:.2f} V")
-            m_temp.metric("Temp", f"{temp} °C")
-            active_state = True
+            if not st.session_state.redirect_triggered:
+                st.session_state.redirect_triggered = True
+                st.toast("Satellite is nearby! Redirect logic triggered.", icon="🛰️")
         else:
-            m_el.metric("Elevation", f"{pos['elevation']:.2f}°", "LOS", delta_color="inverse")
-            m_volt.metric("Battery", "No Signal")
-            m_temp.metric("Temp", "No Signal")
-            active_state = False
+            if st.session_state.redirect_triggered:
+                st.session_state.redirect_triggered = False
 
-        # RADAR UPDATE
-        fig_radar = create_radar_fig(pos['azimuth'], pos['elevation'], is_active=active_state)
-        radar_placeholder.plotly_chart(fig_radar)
+        # --- DRAW UI INSIDE FRAGMENT ---
+        c1, c2 = st.columns([2, 1])
         
-        if loop_counter % 20 == 0:
+        with c1:
+            st.subheader("Polar Radar")
+            mc1, mc2, mc3 = st.columns(3)
+            mc1.metric("Azimuth", f"{pos['azimuth']:.2f}°")
+            if is_visible:
+                mc2.metric("Elevation", f"{pos['elevation']:.2f}°", "LOCKED")
+            else:
+                mc2.metric("Elevation", f"{pos['elevation']:.2f}°", "LOS", delta_color="inverse")
+            mc3.metric("Range", f"{pos['distance_km']:.0f} km")
+            
+            fig_radar = create_radar_fig(pos['azimuth'], pos['elevation'], is_active=is_visible)
+            st.plotly_chart(fig_radar, use_container_width=True)
+
+        with c2:
+            st.subheader("Telemetry Link")
+            st.metric("Frequency", f"{(base_freq+mock_doppler)/1e6:.6f} MHz")
+            st.metric("Doppler", f"{mock_doppler} Hz")
+            st.divider()
+            if is_visible:
+                st.metric("Battery", f"{voltage:.2f} V")
+                st.metric("Temp", f"{temp} °C")
+            else:
+                st.metric("Battery", "No Signal")
+                st.metric("Temp", "No Signal")
+
+        # Ground track updates less frequently (every 10 seconds / 20 loops)
+        st.subheader("🌍 Global Ground Track")
+        st_lat = float(orbit_engine.config['GROUND_STATION']['latitude'])
+        st_lon = float(orbit_engine.config['GROUND_STATION']['longitude'])
+        
+        if loop_counter % 20 == 0 or "fig_map" not in st.session_state:
+            track_data = orbit_engine.get_ground_track(sat_obj_ref, duration_minutes=180)
+            st.session_state.fig_map = create_map_fig(pos, track_data, st_lat, st_lon)
+            
+        st.plotly_chart(st.session_state.fig_map, use_container_width=True)
+        st.session_state.tracking_loop_count = loop_counter + 1
+
+    # 3. RENDER LOGIC
+    if tracking_active and sat_obj:
+        live_tracking_ui(sat_obj)
+    else:
+        # Reset tracking state when toggle is off
+        if "tracking_initialized" in st.session_state and st.session_state.tracking_initialized:
+            st.session_state.tracking_initialized = False
+            st.session_state.tracking_loop_count = 0
+            
+        # Initial Static Render
+        if sat_obj:
+            col1, col2 = st.columns([2, 1])
+            with col1:
+                st.subheader("Polar Radar")
+                c1, c2, c3 = st.columns(3)
+                c1.metric("Azimuth", "0.0°")
+                c2.metric("Elevation", "0.0°")
+                c3.metric("Range", "0 km")
+                
+                pos = orbit_engine.get_position(sat_obj)
+                fig_radar = create_radar_fig(pos['azimuth'], pos['elevation'], is_active=False)
+                st.plotly_chart(fig_radar, use_container_width=True)
+            with col2:
+                st.subheader("Telemetry Link")
+                st.metric("Frequency", "--- MHz")
+                st.metric("Doppler", "--- Hz")
+                st.divider()
+                st.metric("Battery", "---")
+                st.metric("Temp", "---")
+                
+            st.subheader("🌍 Global Ground Track")
+            st_lat = float(orbit_engine.config['GROUND_STATION']['latitude'])
+            st_lon = float(orbit_engine.config['GROUND_STATION']['longitude'])
             track_data = orbit_engine.get_ground_track(sat_obj, duration_minutes=180)
             fig_map = create_map_fig(pos, track_data, st_lat, st_lon)
-            map_placeholder.plotly_chart(fig_map)
-        
-        # Increment counter and auto-refresh for next update
-        st.session_state.tracking_loop_count = loop_counter + 1
-        
-        # Stop button to exit tracking mode
-        if st.button("⏹ Stop Tracking", key="stop_tracking_btn"):
-            st.session_state.tracking_initialized = False
-            st.session_state.tracking_loop_count = 0
-            st.rerun()
-        
-        # Auto-refresh every 0.5 seconds (non-blocking)
-        time.sleep(0.5)
-        st.rerun()
-    
-    # Reset tracking state when toggle is turned off
-    elif not tracking_active and "tracking_initialized" in st.session_state:
-        if st.session_state.get("tracking_initialized", False):
-            st.session_state.tracking_initialized = False
-            st.session_state.tracking_loop_count = 0
+            st.plotly_chart(fig_map, use_container_width=True)
 
 # ==========================
 # PASS PREDICTOR
