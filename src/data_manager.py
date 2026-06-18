@@ -28,32 +28,61 @@ class DataManager:
         # Look at your terminal when you start tracking!
         print(f"[DATA MANAGER] Saving log to: {self.filepath}")
         
-        # Initialize File
+        # Initialize File - keep handle open for session
+        self._file = None
+        self._writer = None
         self._init_log()
 
     def _init_log(self):
-        """Creates the file with headers."""
+        """Creates the file with headers and keeps file open."""
         try:
-            with open(self.filepath, 'w', newline='') as f:
-                writer = csv.writer(f)
-                writer.writerow(["timestamp", "azimuth", "elevation", "range", "doppler", "voltage", "temp"])
+            self._file = open(self.filepath, 'w', newline='')
+            self._writer = csv.writer(self._file)
+            self._writer.writerow(["timestamp", "azimuth", "elevation", "range", "doppler", "voltage", "temp"])
+            self._file.flush()
         except Exception as e:
             print(f"[ERROR] Could not create log: {e}")
 
     def log_packet(self, telemetry, position, doppler):
-        """Appends a row of data."""
-        try:
-            with open(self.filepath, 'a', newline='') as f:
-                writer = csv.writer(f)
-                writer.writerow([
-                    datetime.now().strftime("%H:%M:%S"),
-                    f"{position['azimuth']:.2f}",
-                    f"{position['elevation']:.2f}",
-                    f"{position['distance_km']:.2f}",
-                    doppler,
-                    telemetry.get('voltage', 0),
-                    telemetry.get('temp', 0)
-                ])
-        except Exception as e:
+        """Appends a row of data using persistent file handle."""
+        if not self._writer:
+            print("[WARN] DataManager file not open, skipping log")
+            return
             
+        try:
+            self._writer.writerow([
+                datetime.now().strftime("%H:%M:%S"),
+                f"{position['azimuth']:.2f}",
+                f"{position['elevation']:.2f}",
+                f"{position['distance_km']:.2f}",
+                doppler,
+                telemetry.get('voltage', 0),
+                telemetry.get('temp', 0)
+            ])
+            self._file.flush()  # Ensure data is written immediately
+        except Exception as e:
             print(f"[ERROR] Write failed: {e}")
+
+    def close(self):
+        """Safely close the file handle."""
+        if self._file:
+            try:
+                self._file.close()
+                self._file = None
+                self._writer = None
+                print(f"[DATA MANAGER] Log file closed: {self.filepath}")
+            except Exception as e:
+                print(f"[ERROR] Failed to close log file: {e}")
+
+    def __del__(self):
+        """Ensure file is closed on object destruction."""
+        self.close()
+
+    def __enter__(self):
+        """Context manager entry."""
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit."""
+        self.close()
+        return False

@@ -1,5 +1,4 @@
-# src/web_ui/app.py
-
+# src/web_ui/app.py 
 import streamlit as st
 import time
 import pandas as pd
@@ -184,51 +183,79 @@ if app_mode == "Mission Control":
         fig_map = create_map_fig(pos, track_data, st_lat, st_lon)
         map_placeholder.plotly_chart(fig_map)
 
-    # 3. LIVE LOOP
+    # 3. LIVE LOOP (Non-blocking with session state)
     if tracking_active and sat_obj:
-        logger = DataManager(selected_sat_name)
+        # Initialize tracking state if not exists
+        if "tracking_initialized" not in st.session_state:
+            st.session_state.tracking_initialized = True
+            st.session_state.tracking_loop_count = 0
+            st.session_state.tracking_logger = DataManager(selected_sat_name)
+        
+        logger = st.session_state.tracking_logger
         base_freq = current_sat_info['frequency']
-        loop_counter = 0
+        loop_counter = st.session_state.tracking_loop_count
 
-        while True:
-            # Physics
-            pos = orbit_engine.get_position(sat_obj)
-            is_visible = pos['elevation'] > 0
-            
-            mock_doppler = random.randint(-2000, 2000) 
-            radio_core.set_doppler_freq(base_freq, mock_doppler)
-            packet = decoder.get_mock_packet()
-            telem = decoder.parse_frame(packet)
-            if telem: logger.log_packet(telem, pos, mock_doppler)
+        # Physics
+        pos = orbit_engine.get_position(sat_obj)
+        is_visible = pos['elevation'] > 0
+        
+        mock_doppler = random.randint(-2000, 2000) 
+        radio_core.set_doppler_freq(base_freq, mock_doppler)
+        packet = decoder.get_mock_packet()
+        telem = decoder.parse_frame(packet)
+        
+        # Handle None return from parse_frame
+        voltage = 0
+        temp = 0
+        if telem:
+            logger.log_packet(telem, pos, mock_doppler)
+            voltage = telem.get('voltage', 0)
+            temp = telem.get('temp', 0)
 
-            # UI METRICS
-            m_az.metric("Azimuth", f"{pos['azimuth']:.2f}°")
-            m_dist.metric("Range", f"{pos['distance_km']:.0f} km")
-            m_freq.metric("Frequency", f"{(base_freq+mock_doppler)/1e6:.6f} MHz")
-            m_dop.metric("Doppler", f"{mock_doppler} Hz")
+        # UI METRICS
+        m_az.metric("Azimuth", f"{pos['azimuth']:.2f}°")
+        m_dist.metric("Range", f"{pos['distance_km']:.0f} km")
+        m_freq.metric("Frequency", f"{(base_freq+mock_doppler)/1e6:.6f} MHz")
+        m_dop.metric("Doppler", f"{mock_doppler} Hz")
 
-            if is_visible:
-                m_el.metric("Elevation", f"{pos['elevation']:.2f}°", "LOCKED")
-                m_volt.metric("Battery", f"{telem['voltage']:.2f} V")
-                m_temp.metric("Temp", f"{telem['temp']} °C")
-                active_state = True
-            else:
-                m_el.metric("Elevation", f"{pos['elevation']:.2f}°", "LOS", delta_color="inverse")
-                m_volt.metric("Battery", "No Signal")
-                m_temp.metric("Temp", "No Signal")
-                active_state = False
+        if is_visible:
+            m_el.metric("Elevation", f"{pos['elevation']:.2f}°", "LOCKED")
+            m_volt.metric("Battery", f"{voltage:.2f} V")
+            m_temp.metric("Temp", f"{temp} °C")
+            active_state = True
+        else:
+            m_el.metric("Elevation", f"{pos['elevation']:.2f}°", "LOS", delta_color="inverse")
+            m_volt.metric("Battery", "No Signal")
+            m_temp.metric("Temp", "No Signal")
+            active_state = False
 
-            # RADAR UPDATE
-            fig_radar = create_radar_fig(pos['azimuth'], pos['elevation'], is_active=active_state)
-            radar_placeholder.plotly_chart(fig_radar)
-            
-            if loop_counter % 20 == 0:
-                track_data = orbit_engine.get_ground_track(sat_obj, duration_minutes=180)
-                fig_map = create_map_fig(pos, track_data, st_lat, st_lon)
-                map_placeholder.plotly_chart(fig_map)
-            
-            loop_counter += 1
-            time.sleep(0.5)
+        # RADAR UPDATE
+        fig_radar = create_radar_fig(pos['azimuth'], pos['elevation'], is_active=active_state)
+        radar_placeholder.plotly_chart(fig_radar)
+        
+        if loop_counter % 20 == 0:
+            track_data = orbit_engine.get_ground_track(sat_obj, duration_minutes=180)
+            fig_map = create_map_fig(pos, track_data, st_lat, st_lon)
+            map_placeholder.plotly_chart(fig_map)
+        
+        # Increment counter and auto-refresh for next update
+        st.session_state.tracking_loop_count = loop_counter + 1
+        
+        # Stop button to exit tracking mode
+        if st.button("⏹ Stop Tracking", key="stop_tracking_btn"):
+            st.session_state.tracking_initialized = False
+            st.session_state.tracking_loop_count = 0
+            st.rerun()
+        
+        # Auto-refresh every 0.5 seconds (non-blocking)
+        time.sleep(0.5)
+        st.rerun()
+    
+    # Reset tracking state when toggle is turned off
+    elif not tracking_active and "tracking_initialized" in st.session_state:
+        if st.session_state.get("tracking_initialized", False):
+            st.session_state.tracking_initialized = False
+            st.session_state.tracking_loop_count = 0
 
 # ==========================
 # PASS PREDICTOR
