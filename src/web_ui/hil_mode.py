@@ -7,7 +7,8 @@ import requests
 import os
 
 # --- CONFIG ---
-BACKEND_URL = os.environ.get("BACKEND_URL", "http://127.0.0.1:8000")
+# Default to localhost for testing, but use the cloud URL if deployed
+API_URL = os.getenv("API_URL", "http://127.0.0.1:8000")
 
 # --- CUSTOM CSS ---
 def inject_hil_css():
@@ -43,7 +44,7 @@ def inject_hil_css():
 # --- API HELPERS ---
 def get_backend_data():
     try:
-        response = requests.get(f"{BACKEND_URL}/status", timeout=0.2)
+        response = requests.get(f"{API_URL}/status", timeout=0.2)
         if response.status_code == 200:
             return response.json()
     except requests.RequestException:
@@ -53,7 +54,7 @@ def get_backend_data():
 
 def send_command(action):
     try:
-        requests.post(f"{BACKEND_URL}/command", json={"action": action}, timeout=0.2)
+        requests.post(f"{API_URL}/command", json={"action": action}, timeout=0.2)
         return True
     except requests.RequestException:
         return False
@@ -153,7 +154,7 @@ def hil_live_telemetry_panel():
         m4.metric("Power", "Draining", "Battery", delta_color="inverse")
 
     st.caption(
-        f"Backend: {BACKEND_URL} | LED: {led_state} | Solar: {solar_status} ({solar_mode})"
+        f"Backend: {API_URL} | LED: {led_state} | Solar: {solar_status} ({solar_mode})"
     )
     st.plotly_chart(create_3d_sat_fig(pitch, roll), use_container_width=True)
 
@@ -235,7 +236,7 @@ def run_hil_telemetry():
         st.markdown(
             f"""
             <div style="text-align: right; padding-top: 5px;">
-                <span style="font-size: 0.8em; color: #888;">{BACKEND_URL}</span><br>
+                <span style="font-size: 0.8em; color: #888;">{API_URL}</span><br>
                 <b>MODE: <span style="color: #00FFFF;">FRAGMENT 2Hz</span></b>
             </div>
             """,
