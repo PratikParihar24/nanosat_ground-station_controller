@@ -166,7 +166,6 @@ def _stop_tracking_session():
         del st.session_state.tracking_logger
     if "tracking_satellite" in st.session_state:
         del st.session_state.tracking_satellite
-    st.session_state.mc_tracking_toggle = False
 
 
 @st.fragment(run_every="0.5s")
