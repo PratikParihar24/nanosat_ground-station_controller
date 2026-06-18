@@ -1,18 +1,32 @@
-# --- Math & Orbit Engine ---
+# ==========================================
+# 1. Ground Station Backend (HIL & Telemetry)
+# ==========================================
+fastapi>=0.100.0    # Asynchronous backend API
+uvicorn>=0.23.0     # ASGI server to run FastAPI
+
+# ==========================================
+# 2. Math & Orbit Engine (Tracking)
+# ==========================================
 skyfield>=1.46      # High precision astronomy/orbit math
-numpy>=1.26.0,<2.0.0 # Allow 1.26.2/1.26.4 etc, but block 2.0+
-sgp4>=2.23          # Simplified General Perturbations
+numpy>=1.26.0      # Numerical computations for tracking algorithms
+sgp4>=2.23          # Simplified General Perturbations for TLEs
 
-# --- Radio & Signal Processing ---
-pyrtlsdr>=0.3.0     # Driver for the SDR hardware
+# ==========================================
+# 3. Radio & Signal Processing (SDR)
+# ==========================================
+pyrtlsdr>=0.3.0     # Driver for the RTL-SDR hardware
 scipy>=1.11.3       # Advanced signal processing filters
-construct>=2.10.69  # Binary parsing
+construct>=2.10.69  # Binary parsing for satellite packets
 
-# --- Frontend & Data ---
-streamlit>=1.31.0   # The Web Dashboard
-pandas>=2.1.1       # Dataframes for CSV logging
-plotly>=5.18.0      # Interactive graphs
+# ==========================================
+# 4. Frontend, UI & Data (Dashboard)
+# ==========================================
+streamlit>=1.31.0   # The Web Dashboard UI
+pandas>=2.1.1       # Dataframes for CSV telemetry logging
+plotly>=5.18.0      # Interactive 3D/2D graphs
 
-# --- Utilities ---
-pyserial>=3.5       # Communication with Rotator hardware
-requests>=2.31.0    # Downloading TLEs
+# ==========================================
+# 5. Hardware Comm & Utilities
+# ==========================================
+pyserial>=3.5       # Serial connection to NodeMCU & Antenna Rotator
+requests>=2.31.0    # Downloading live TLEs from Celestrak/Space-Track

@@ -74,6 +74,16 @@ class DataManager:
             except Exception as e:
                 print(f"[ERROR] Failed to close log file: {e}")
 
+    @property
+    def is_open(self):
+        return self._file is not None
+
+
+def close_tracking_logger(logger):
+    """Explicitly release a mission-control log session (idempotent)."""
+    if logger is not None:
+        logger.close()
+
     def __del__(self):
         """Ensure file is closed on object destruction."""
         self.close()
