@@ -42,21 +42,41 @@ def inject_hil_css():
 
 
 # --- API HELPERS ---
+@st.cache_resource
+def get_http_session():
+    return requests.Session()
+
 def get_backend_data():
+    session = get_http_session()
+    
+    if "failed_pings" not in st.session_state:
+        st.session_state.failed_pings = 0
+    if "last_good_telemetry" not in st.session_state:
+        st.session_state.last_good_telemetry = None
+
     try:
-        response = requests.get(f"{API_URL}/status", timeout=0.2)
+        response = session.get(f"{API_URL}/status", timeout=0.3)
         if response.status_code == 200:
-            return response.json()
-    except requests.RequestException:
+            data = response.json()
+            st.session_state.last_good_telemetry = data
+            st.session_state.failed_pings = 0
+            return data
+    except requests.exceptions.RequestException:
+        st.session_state.failed_pings += 1
+
+    if st.session_state.failed_pings > 3:
         return None
-    return None
+        
+    return st.session_state.last_good_telemetry
 
 
-def send_command(action):
+def send_command(cmd_string):
+    session = get_http_session()
+    headers = {"X-API-Key": "NGSC-SECURE-KEY-2026"}
     try:
-        requests.post(f"{API_URL}/command", json={"action": action}, timeout=0.2)
+        session.post(f"{API_URL}/command", json={"command": cmd_string, "action": cmd_string}, headers=headers, timeout=0.3)
         return True
-    except requests.RequestException:
+    except requests.exceptions.RequestException:
         return False
 
 
@@ -209,15 +229,15 @@ def _render_hil_controls():
         b1, b2, b3 = st.columns(3)
         with b1:
             if st.button("OPEN"):
-                send_command("DEPLOY_SOLAR")
+                send_command("SOLAR_DEPLOY")
                 st.toast("Deploy command sent")
         with b2:
             if st.button("CLOSE"):
-                send_command("RETRACT_SOLAR")
+                send_command("SOLAR_RETRACT")
                 st.toast("Retract command sent")
         with b3:
             if st.button("AUTO", type="secondary"):
-                send_command("AUTO_SOLAR")
+                send_command("MODE_AUTO")
                 st.toast("Auto mode command sent")
 
 

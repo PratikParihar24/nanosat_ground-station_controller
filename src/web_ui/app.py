@@ -309,10 +309,6 @@ if app_mode == "Mission Control":
     )
 
     tracking_active = st.toggle("ACTIVATE TRACKING", key="mc_tracking_toggle")
-    stop_col, _ = st.columns([1, 4])
-    with stop_col:
-        if st.button("Stop Tracking", disabled=not tracking_active, key="stop_tracking_btn"):
-            _stop_tracking_session()
 
     if not tracking_active and st.session_state.get("tracking_initialized"):
         _stop_tracking_session()
