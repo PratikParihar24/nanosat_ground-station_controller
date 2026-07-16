@@ -252,6 +252,11 @@ def get_status():
         return ground_state
 
 
+@app.get("/keep-alive")
+def keep_alive():
+    return {"status": "alive"}
+
+
 class Command(BaseModel):
     action: str
 
